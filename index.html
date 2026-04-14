@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Logistics Tracking</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    * { -webkit-tap-highlight-color: transparent; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    .page { display: none; }
+    .page.active { display: block; }
+    .step-dot { transition: all 0.3s ease; }
+    .step-line { transition: background 0.5s ease; }
+    .photo-preview { object-fit: cover; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { animation: spin 0.8s linear infinite; }
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+    .fade-in { animation: fadeInUp 0.4s ease forwards; }
+    input:focus { outline: none; }
+    .btn-primary {
+      background: linear-gradient(135deg, #06b6d4, #0891b2);
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+    .btn-primary:active { transform: scale(0.97); }
+    .btn-success {
+      background: linear-gradient(135deg, #10b981, #059669);
+      transition: transform 0.1s;
+    }
+    .btn-success:active { transform: scale(0.97); }
+    .btn-danger {
+      background: linear-gradient(135deg, #f97316, #ea580c);
+    }
+    .card-shadow { box-shadow: 0 2px 16px rgba(0,0,0,0.08); }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+  <!-- ═══════════════════════════════════════════
+       GLOBAL: Loading Overlay
+  ════════════════════════════════════════════ -->
+  <div id="global-loader" class="fixed inset-0 bg-white/90 z-50 flex flex-col items-center justify-center" style="display:none!important">
+    <svg class="spinner w-12 h-12 text-cyan-500" viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="60" stroke-dashoffset="20" stroke-linecap="round"/>
+    </svg>
+    <p id="loader-text" class="mt-4 text-gray-500 text-sm font-medium">กำลังโหลด...</p>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       GLOBAL: Top Bar
+  ════════════════════════════════════════════ -->
+  <div class="bg-white border-b border-gray-100 sticky top-0 z-40 card-shadow">
+    <div class="flex items-center px-4 py-3 gap-3">
+      <div class="w-8 h-8 rounded-lg bg-cyan-500 flex items-center justify-center flex-shrink-0">
+        <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
+        </svg>
+      </div>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-semibold text-gray-800 truncate" id="top-bar-title">ระบบติดตามการขนส่ง</p>
+        <p class="text-xs text-gray-400" id="top-bar-sub">กำลังโหลด...</p>
+      </div>
+      <div id="user-avatar" class="w-8 h-8 rounded-full bg-gray-200 overflow-hidden flex-shrink-0">
+        <img id="avatar-img" src="" alt="" class="w-full h-full object-cover hidden"/>
+        <div id="avatar-placeholder" class="w-full h-full flex items-center justify-center text-xs text-gray-400">?</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="max-w-lg mx-auto pb-8">
+
+    <!-- ═══════════════════════════════════════════
+         PAGE 0: INIT / Error
+    ════════════════════════════════════════════ -->
+    <div id="page-init" class="page active px-4 pt-16 text-center">
+      <div class="w-16 h-16 rounded-2xl bg-cyan-50 mx-auto flex items-center justify-center mb-4">
+        <svg class="spinner w-8 h-8 text-cyan-500" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="60" stroke-dashoffset="20" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <p class="text-gray-500 text-sm">กำลังเชื่อมต่อ LIFF...</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+         PAGE 1: CHECK-IN
+    ════════════════════════════════════════════ -->
+    <div id="page-checkin" class="page px-4 pt-6 fade-in">
+      <div class="mb-5">
+        <h1 class="text-xl font-bold text-gray-800">เปิดงานขนส่ง</h1>
+        <p class="text-sm text-gray-400 mt-0.5">กรอกข้อมูลก่อนออกจากต้นทาง</p>
+      </div>
+
+      <div class="bg-white rounded-2xl card-shadow p-4 space-y-3 mb-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">เวลา Standby</label>
+          <input type="datetime-local" id="standby-time" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 bg-gray-50 focus:border-cyan-400 focus:bg-white transition" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">ประเภทรถ</label>
+          <select id="vehicle-type" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 bg-gray-50 focus:border-cyan-400 transition">
+            <option value="">-- เลือกประเภทรถ --</option>
+            <option>รถกระบะ</option>
+            <option>รถ 6 ล้อ</option>
+            <option>รถ 10 ล้อ</option>
+            <option>รถตู้</option>
+            <option>รถพ่วง</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">ชื่อคนขับ</label>
+          <input type="text" id="driver-name" placeholder="ชื่อ-นามสกุล" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 bg-gray-50 focus:border-cyan-400 focus:bg-white transition" />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">ทะเบียนรถ</label>
+            <input type="text" id="plate-number" placeholder="กข 1234" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 bg-gray-50 focus:border-cyan-400 focus:bg-white transition" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">เบอร์โทร</label>
+            <input type="tel" id="phone" placeholder="0812345678" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 bg-gray-50 focus:border-cyan-400 focus:bg-white transition" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Photo Capture -->
+      <div class="bg-white rounded-2xl card-shadow p-4 mb-4">
+        <p class="text-xs font-medium text-gray-500 mb-3">ถ่ายรูปต้นทาง</p>
+        <input type="file" id="depart-photo-input" accept="image/*" capture="environment" class="hidden" onchange="handleDepartPhoto(event)" />
+        <div id="depart-photo-preview" class="hidden mb-3">
+          <img id="depart-photo-img" class="photo-preview w-full h-48 rounded-xl object-cover" src="" alt="รูปต้นทาง" />
+        </div>
+        <button onclick="document.getElementById('depart-photo-input').click()"
+          class="w-full py-3 rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center gap-2 text-sm text-gray-400 hover:border-cyan-300 hover:text-cyan-500 transition">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+          </svg>
+          <span id="depart-photo-label">แตะเพื่อถ่ายรูป</span>
+        </button>
+      </div>
+
+      <button onclick="submitCheckin()"
+        class="btn-primary w-full py-4 rounded-2xl text-white font-semibold text-base shadow-lg shadow-cyan-200 flex items-center justify-center gap-2">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+        </svg>
+        บันทึกเวลาออก
+      </button>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+         PAGE 2: PROGRESS (Timeline)
+    ════════════════════════════════════════════ -->
+    <div id="page-progress" class="page px-4 pt-6 fade-in">
+      <div class="mb-5">
+        <h1 class="text-xl font-bold text-gray-800">งานระหว่างทาง</h1>
+        <p class="text-sm text-gray-400 mt-0.5" id="progress-driver-name">คนขับ: —</p>
+      </div>
+
+      <!-- Progress Tracker -->
+      <div class="bg-white rounded-2xl card-shadow p-4 mb-4">
+        <div class="flex items-center">
+          <div class="step-dot w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white bg-cyan-500 flex-shrink-0" id="dot-0">✓</div>
+          <div class="step-line flex-1 h-1 mx-1 bg-gray-200 rounded" id="line-1"></div>
+          <div class="step-dot w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold bg-gray-200 text-gray-400 flex-shrink-0" id="dot-1">1</div>
+          <div class="step-line flex-1 h-1 mx-1 bg-gray-200 rounded" id="line-2"></div>
+          <div class="step-dot w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold bg-gray-200 text-gray-400 flex-shrink-0" id="dot-2">2</div>
+          <div class="step-line flex-1 h-1 mx-1 bg-gray-200 rounded" id="line-3"></div>
+          <div class="step-dot w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold bg-gray-200 text-gray-400 flex-shrink-0" id="dot-3">3</div>
+        </div>
+        <div class="flex justify-between text-xs text-gray-400 mt-2 px-0">
+          <span>ต้นทาง</span>
+          <span>จุด 1</span>
+          <span>จุด 2</span>
+          <span>จุด 3</span>
+        </div>
+      </div>
+
+      <!-- Stop Cards -->
+      <div id="stop-cards" class="space-y-3"></div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+         PAGE 3: SUMMARY
+    ════════════════════════════════════════════ -->
+    <div id="page-summary" class="page px-4 pt-6 fade-in">
+      <div class="text-center mb-6">
+        <div class="w-16 h-16 rounded-full bg-emerald-100 mx-auto flex items-center justify-center mb-3">
+          <svg class="w-9 h-9 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+        </div>
+        <h1 class="text-xl font-bold text-gray-800">ส่งของเสร็จสิ้น!</h1>
+        <p class="text-sm text-gray-400">สรุปรายละเอียดการขนส่ง</p>
+      </div>
+
+      <div id="summary-content" class="space-y-3"></div>
+
+      <div class="mt-6 bg-white rounded-2xl card-shadow p-4">
+        <div class="flex items-center justify-between">
+          <span class="text-sm font-medium text-gray-600">เวลารวมทั้งหมด</span>
+          <span class="text-2xl font-bold text-cyan-600" id="total-duration">— นาที</span>
+        </div>
+      </div>
+
+      <button onclick="startNewJob()"
+        class="btn-primary w-full py-4 rounded-2xl text-white font-semibold text-base shadow-lg shadow-cyan-200 mt-4">
+        เริ่มงานใหม่
+      </button>
+    </div>
+
+  </div><!-- /.max-w-lg -->
+
+  <!-- ═══════════════════════════════════════════
+       GPS ERROR TOAST
+  ════════════════════════════════════════════ -->
+  <div id="toast" class="fixed bottom-6 left-4 right-4 max-w-lg mx-auto z-50 hidden">
+    <div id="toast-inner" class="rounded-2xl px-4 py-3.5 text-sm font-medium text-white shadow-lg flex items-start gap-3">
+      <svg id="toast-icon" class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"></svg>
+      <span id="toast-msg"></span>
+    </div>
+  </div>
+
+<!-- ═══════════════════════════════════════════
+     JAVASCRIPT
+════════════════════════════════════════════ -->
+<script>
+// ─── CONFIG ───────────────────────────────────────────────
+const GAS_URL      = 'YOUR_GAS_WEB_APP_URL_HERE'; // ← ใส่ Web App URL จาก GAS
+const SECRET_TOKEN = 'YOUR_SECRET_TOKEN_HERE';     // ← ต้องตรงกับ GAS
+const LIFF_ID      = 'YOUR_LIFF_ID_HERE';          // ← ใส่ LIFF ID จาก LINE Developers
+const GPS_MAX_M    = 200;
+
+// STOPS CONFIG — พิกัดปลายทางแต่ละจุด (ดึงจาก Sheets ก็ได้)
+// ปกติ GAS จะส่งมาพร้อม job data
+let STATE = {
+  profile:      null,
+  jobId:        null,
+  stops:        [],          // [{lat, lng, name}, ...]
+  currentStop:  0,           // 0 = ยังไม่ถึงจุดแรก, 1-3 = กำลังทำจุดนั้น
+  stopStatus:   {},          // { '1': {arrived: bool, completed: bool, arriveTime, completeTime} }
+  departPhoto:  null,        // base64
+};
+
+// ─── LIFF INIT ────────────────────────────────────────────
+async function initApp() {
+  try {
+    await liff.init({ liffId: LIFF_ID });
+    if (!liff.isLoggedIn()) { liff.login(); return; }
+
+    STATE.profile = await liff.getProfile();
+
+    // อัปเดต UI top bar
+    document.getElementById('top-bar-sub').textContent = STATE.profile.displayName;
+    const avatarImg = document.getElementById('avatar-img');
+    if (STATE.profile.pictureUrl) {
+      avatarImg.src = STATE.profile.pictureUrl;
+      avatarImg.classList.remove('hidden');
+      document.getElementById('avatar-placeholder').classList.add('hidden');
+    }
+
+    // TODO: เช็คว่ามี job ค้างอยู่หรือเปล่า (resume flow)
+    // const savedJobId = localStorage.getItem('currentJobId');
+    // if (savedJobId) { await resumeJob(savedJobId); return; }
+
+    showPage('checkin');
+    // ตั้งค่า default standby time = ตอนนี้
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    document.getElementById('standby-time').value = now.toISOString().slice(0,16);
+
+  } catch (err) {
+    console.error('LIFF init error:', err);
+    showToast('ไม่สามารถเชื่อมต่อ LINE ได้: ' + err.message, 'error');
+    document.getElementById('page-init').innerHTML = `
+      <div class="text-center pt-16 px-4">
+        <p class="text-red-400 text-sm">เกิดข้อผิดพลาด: กรุณาเปิดใน LINE App</p>
+        <p class="text-gray-400 text-xs mt-2">${err.message}</p>
+      </div>`;
+  }
+}
+
+// ─── PAGE NAVIGATION ──────────────────────────────────────
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  const titles = {
+    init: 'กำลังโหลด',
+    checkin: 'เปิดงาน',
+    progress: 'งานระหว่างทาง',
+    summary: 'สรุปงาน'
+  };
+  document.getElementById('top-bar-title').textContent = titles[name] || '';
+}
+
+// ─── CHECK-IN SUBMIT ──────────────────────────────────────
+async function submitCheckin() {
+  const driverName  = document.getElementById('driver-name').value.trim();
+  const plateNumber = document.getElementById('plate-number').value.trim();
+  const vehicleType = document.getElementById('vehicle-type').value;
+  const phone       = document.getElementById('phone').value.trim();
+  const standbyTime = document.getElementById('standby-time').value;
+
+  if (!driverName || !plateNumber || !vehicleType) {
+    showToast('กรุณากรอก ชื่อคนขับ, ทะเบียนรถ และประเภทรถ', 'warning');
+    return;
+  }
+  if (!STATE.departPhoto) {
+    showToast('กรุณาถ่ายรูปต้นทางก่อน', 'warning');
+    return;
+  }
+
+  showLoader('กำลังสร้างงาน...');
+  try {
+    // 1. สร้าง Job
+    const res = await apiPost({
+      action: 'createJob',
+      lineUserId: STATE.profile.userId,
+      driverName, vehicleType, plateNumber, phone, standbyTime,
+      stops: STATE.stops, // พิกัดจุดส่ง (อาจโหลดจาก Sheets ก่อน)
+    });
+
+    STATE.jobId = res.jobId;
+    localStorage.setItem('currentJobId', res.jobId);
+
+    // 2. บันทึกเวลาออก + รูป
+    showLoader('กำลังอัปโหลดรูป...');
+    await apiPost({
+      action: 'updateDepart',
+      jobId: STATE.jobId,
+      departPhotoBase64: STATE.departPhoto.split(',')[1],
+      departPhotoMime: 'image/jpeg',
+    });
+
+    // 3. ไปหน้า Progress
+    STATE.currentStop = 1;
+    STATE.stopStatus = { 1: {}, 2: {}, 3: {} };
+    document.getElementById('progress-driver-name').textContent = 'คนขับ: ' + driverName;
+    renderStopCards();
+    showPage('progress');
+
+  } catch (err) {
+    showToast('เกิดข้อผิดพลาด: ' + err.message, 'error');
+  } finally {
+    hideLoader();
+  }
+}
+
+// ─── STOP CARDS RENDER ────────────────────────────────────
+function renderStopCards() {
+  const container = document.getElementById('stop-cards');
+  container.innerHTML = '';
+
+  for (let s = 1; s <= 3; s++) {
+    const status = STATE.stopStatus[s] || {};
+    const isCurrent = s === STATE.currentStop;
+    const isDone     = status.completed;
+    const isLocked   = s > STATE.currentStop;
+
+    const card = document.createElement('div');
+    card.className = `bg-white rounded-2xl card-shadow p-4 transition-all ${isLocked ? 'opacity-50' : ''} ${isCurrent ? 'ring-2 ring-cyan-400' : ''}`;
+
+    let statusBadge = '';
+    if (isDone)     statusBadge = '<span class="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium">เสร็จแล้ว</span>';
+    else if (isCurrent) statusBadge = '<span class="text-xs bg-cyan-100 text-cyan-700 px-2 py-0.5 rounded-full font-medium">กำลังดำเนินการ</span>';
+    else            statusBadge = '<span class="text-xs bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full font-medium">รอดำเนินการ</span>';
+
+    let timeBadges = '';
+    if (status.arriveTime) {
+      timeBadges += `<div class="flex items-center gap-1.5 text-xs text-gray-400 mt-1">
+        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        ถึง: ${formatTime(status.arriveTime)}
+      </div>`;
+    }
+    if (status.completeTime) {
+      timeBadges += `<div class="flex items-center gap-1.5 text-xs text-emerald-500 mt-1">
+        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        เสร็จ: ${formatTime(status.completeTime)}
+      </div>`;
+    }
+
+    let buttons = '';
+    if (!isLocked && !isDone) {
+      if (!status.arrived) {
+        buttons += `<button onclick="stopAction(${s}, 'arrive')"
+          class="btn-primary w-full py-3.5 rounded-xl text-white font-semibold text-sm flex items-center justify-center gap-2">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/></svg>
+          ถ่ายรูปเมื่อถึงจุด ${s}
+        </button>`;
+      } else {
+        buttons += `<button onclick="stopAction(${s}, 'complete')"
+          class="btn-success w-full py-3.5 rounded-xl text-white font-semibold text-sm flex items-center justify-center gap-2">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          ถ่ายรูปเมื่อเสร็จจุด ${s}
+        </button>`;
+      }
+    }
+
+    card.innerHTML = `
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm
+            ${isDone ? 'bg-emerald-100 text-emerald-600' : isCurrent ? 'bg-cyan-100 text-cyan-600' : 'bg-gray-100 text-gray-400'}">
+            ${isDone ? '✓' : s}
+          </div>
+          <div>
+            <p class="text-sm font-semibold text-gray-800">จุดส่งที่ ${s}</p>
+            ${timeBadges}
+          </div>
+        </div>
+        ${statusBadge}
+      </div>
+      ${buttons ? `<div class="mt-3">${buttons}</div>` : ''}
+    `;
+    container.appendChild(card);
+  }
+  updateProgressDots();
+}
+
+// ─── STOP ACTION (arrive / complete) ─────────────────────
+function stopAction(stopNum, eventType) {
+  // สร้าง input file ชั่วคราว
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.capture = 'environment';
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    showLoader('กำลังตรวจสอบ GPS...');
+    try {
+      const coords = await getGPSCoords();
+      const base64 = await fileToBase64(file);
+
+      showLoader('กำลังบันทึก...');
+      const res = await apiPost({
+        action: 'logStop',
+        jobId: STATE.jobId,
+        stopNumber: stopNum,
+        eventType,
+        lat: coords.latitude,
+        lng: coords.longitude,
+        photoBase64: base64.split(',')[1],
+        photoMime: file.type,
+      });
+
+      const now = new Date().toISOString();
+      if (eventType === 'arrive') {
+        STATE.stopStatus[stopNum].arrived = true;
+        STATE.stopStatus[stopNum].arriveTime = now;
+        showToast(`✓ บันทึกเวลาถึงจุด ${stopNum} แล้ว (ห่าง ${res.distanceM} ม.)`, 'success');
+      } else {
+        STATE.stopStatus[stopNum].completed = true;
+        STATE.stopStatus[stopNum].completeTime = now;
+        if (stopNum < 3) {
+          STATE.currentStop = stopNum + 1;
+          showToast(`✓ เสร็จจุด ${stopNum} — ไปจุด ${stopNum + 1} ได้เลย!`, 'success');
+        } else {
+          await completeJob();
+          return;
+        }
+      }
+      renderStopCards();
+
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      hideLoader();
+    }
+  };
+  input.click();
+}
+
+// ─── COMPLETE JOB ─────────────────────────────────────────
+async function completeJob() {
+  showLoader('กำลังปิดงาน...');
+  try {
+    const res = await apiPost({ action: 'completeJob', jobId: STATE.jobId });
+    renderSummary(res.summary);
+    showPage('summary');
+    localStorage.removeItem('currentJobId');
+  } catch (err) {
+    showToast('เกิดข้อผิดพลาด: ' + err.message, 'error');
+  } finally {
+    hideLoader();
+  }
+}
+
+// ─── SUMMARY RENDER ───────────────────────────────────────
+function renderSummary(summary) {
+  const container = document.getElementById('summary-content');
+  container.innerHTML = '';
+
+  (summary.stops || []).forEach(stop => {
+    const div = document.createElement('div');
+    div.className = 'bg-white rounded-2xl card-shadow p-4';
+    div.innerHTML = `
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold text-sm">✓</div>
+          <p class="font-semibold text-gray-800">จุดส่งที่ ${stop.stopNumber}</p>
+        </div>
+        <span class="text-lg font-bold text-cyan-600">${stop.durationMin} นาที</span>
+      </div>
+      <div class="grid grid-cols-2 gap-2 text-xs text-gray-500">
+        <div>ถึง: <span class="text-gray-700 font-medium">${formatTime(stop.arriveTime)}</span></div>
+        <div>เสร็จ: <span class="text-gray-700 font-medium">${formatTime(stop.completeTime)}</span></div>
+      </div>
+    `;
+    container.appendChild(div);
+  });
+
+  document.getElementById('total-duration').textContent = (summary.totalDurationMin || 0) + ' นาที';
+}
+
+// ─── UPDATE PROGRESS DOTS ─────────────────────────────────
+function updateProgressDots() {
+  // dot-0 = ต้นทาง (always done), dot-1..3 = stops
+  for (let s = 1; s <= 3; s++) {
+    const dot  = document.getElementById('dot-' + s);
+    const line = document.getElementById('line-' + s);
+    const st   = STATE.stopStatus[s] || {};
+
+    if (st.completed) {
+      dot.className  = 'step-dot w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white bg-emerald-500 flex-shrink-0';
+      dot.textContent = '✓';
+      if (line) line.classList.replace('bg-gray-200', 'bg-emerald-400');
+    } else if (s === STATE.currentStop) {
+      dot.className  = 'step-dot w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white bg-cyan-500 flex-shrink-0';
+      dot.textContent = s;
+    } else {
+      dot.className  = 'step-dot w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold bg-gray-200 text-gray-400 flex-shrink-0';
+      dot.textContent = s;
+    }
+  }
+}
+
+// ─── GPS ──────────────────────────────────────────────────
+function getGPSCoords() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error('อุปกรณ์ไม่รองรับ GPS'));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve(pos.coords),
+      err => reject(new Error('ไม่สามารถดึงพิกัด GPS ได้: ' + err.message)),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  });
+}
+
+function haversineDistance(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// ─── PHOTO HELPERS ────────────────────────────────────────
+function handleDepartPhoto(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    STATE.departPhoto = e.target.result;
+    const img = document.getElementById('depart-photo-img');
+    img.src = e.target.result;
+    document.getElementById('depart-photo-preview').classList.remove('hidden');
+    document.getElementById('depart-photo-label').textContent = 'เปลี่ยนรูป';
+  };
+  reader.readAsDataURL(file);
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload  = e => resolve(e.target.result);
+    reader.onerror = () => reject(new Error('อ่านไฟล์ไม่ได้'));
+    reader.readAsDataURL(file);
+  });
+}
+
+// ─── API CALL ─────────────────────────────────────────────
+async function apiPost(body) {
+  const response = await fetch(`${GAS_URL}?token=${encodeURIComponent(SECRET_TOKEN)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...body, token: SECRET_TOKEN }),
+  });
+  if (!response.ok) throw new Error('HTTP error: ' + response.status);
+  const data = await response.json();
+  if (!data.success) throw new Error(data.error || 'เกิดข้อผิดพลาด');
+  return data;
+}
+
+// ─── LOADER ───────────────────────────────────────────────
+function showLoader(msg = 'กำลังโหลด...') {
+  document.getElementById('loader-text').textContent = msg;
+  document.getElementById('global-loader').style.cssText = 'display:flex!important';
+}
+function hideLoader() {
+  document.getElementById('global-loader').style.cssText = 'display:none!important';
+}
+
+// ─── TOAST ────────────────────────────────────────────────
+let toastTimer = null;
+function showToast(msg, type = 'info') {
+  const toast = document.getElementById('toast');
+  const inner = document.getElementById('toast-inner');
+  const icon  = document.getElementById('toast-icon');
+  document.getElementById('toast-msg').textContent = msg;
+
+  const styles = {
+    success: { bg: 'bg-emerald-500', path: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
+    error:   { bg: 'bg-red-500',     path: 'M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+    warning: { bg: 'bg-amber-500',   path: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' },
+    info:    { bg: 'bg-cyan-500',    path: 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+  };
+  const s = styles[type] || styles.info;
+  inner.className = `rounded-2xl px-4 py-3.5 text-sm font-medium text-white shadow-lg flex items-start gap-3 ${s.bg}`;
+  icon.innerHTML  = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${s.path}"/>`;
+
+  toast.classList.remove('hidden');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.add('hidden'), 4000);
+}
+
+// ─── HELPERS ──────────────────────────────────────────────
+function formatTime(isoStr) {
+  if (!isoStr) return '—';
+  const d = new Date(isoStr);
+  return d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+}
+
+function startNewJob() {
+  STATE = { profile: STATE.profile, jobId: null, stops: [], currentStop: 0, stopStatus: {}, departPhoto: null };
+  document.getElementById('driver-name').value = '';
+  document.getElementById('plate-number').value = '';
+  document.getElementById('phone').value = '';
+  document.getElementById('vehicle-type').value = '';
+  document.getElementById('depart-photo-preview').classList.add('hidden');
+  document.getElementById('depart-photo-label').textContent = 'แตะเพื่อถ่ายรูป';
+  STATE.departPhoto = null;
+  showPage('checkin');
+}
+
+// ─── BOOT ─────────────────────────────────────────────────
+window.addEventListener('load', initApp);
+</script>
+</body>
+</html>
