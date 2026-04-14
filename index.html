@@ -586,15 +586,27 @@ function fileToBase64(file) {
 
 // ─── API CALL ─────────────────────────────────────────────
 async function apiPost(body) {
-  const response = await fetch(`${GAS_URL}?token=${encodeURIComponent(SECRET_TOKEN)}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...body, token: SECRET_TOKEN }),
-  });
-  if (!response.ok) throw new Error('HTTP error: ' + response.status);
-  const data = await response.json();
-  if (!data.success) throw new Error(data.error || 'เกิดข้อผิดพลาด');
-  return data;
+  // 1. นำ headers ออก เพื่อเลี่ยง Preflight (CORS)
+  // 2. ใช้ mode: 'no-cors' ถ้าไม่ต้องการอ่านค่าตอบกลับ (แต่เคสนี้คุณต้องการอ่าน data.success ให้ใช้แบบปกติแต่ลบ header)
+  
+  try {
+    const response = await fetch(`${GAS_URL}?token=${encodeURIComponent(SECRET_TOKEN)}`, {
+      method: 'POST',
+      // ลบบรรทัด headers: { 'Content-Type': 'application/json' } ออก
+      body: JSON.stringify({ ...body, token: SECRET_TOKEN }),
+    });
+
+    // หมายเหตุ: เมื่อไม่ส่ง Content-Type บางครั้ง response.ok อาจจะเป็น false 
+    // แม้บันทึกสำเร็จ (เพราะ GAS redirect) ให้เช็คผลลัพธ์จากเนื้อหาแทน
+    
+    const data = await response.json();
+    if (!data.success) throw new Error(data.error || 'เกิดข้อผิดพลาด');
+    return data;
+    
+  } catch (error) {
+    console.error('API Error:', error);
+    throw error;
+  }
 }
 
 // ─── LOADER ───────────────────────────────────────────────
